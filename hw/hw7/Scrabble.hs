@@ -24,4 +24,7 @@ letterScore c
 score c = Score (letterScore c)
 scoreString = mconcat . map score
 
+getScore :: Score -> Int
+getScore (Score i) = i
+
 

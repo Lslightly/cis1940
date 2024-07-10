@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 module JoinList where
 import Sized (Sized (size), Size (Size), getSize)
 -- data JoinListBasic a =  Empty
@@ -10,6 +11,11 @@ import Sized (Sized (size), Size (Size), getSize)
 -- jlbToList (Append l1 l2) = jlbToList l1 ++ jlbToList l2
 
 import Scrabble
+
+import Data.Monoid
+
+import Buffer
+import Editor (runEditor, editor)
 
 data JoinList m a = Empty
                 |   Single m a
@@ -85,8 +91,8 @@ dropJ 0 jl = jl
 dropJ n jl | n >= sizeofJL jl = Empty
            | n < 0 = jl
 dropJ n (Append m left right)
-    | n >= leftsize = Append (tag (dropJ (n - leftsize) right)) Empty (dropJ (n - leftsize) right)
-    | otherwise = Append (tag (dropJ n left) <> tag right) (dropJ n left) right
+    | n >= leftsize = Empty +++ (dropJ (n - leftsize) right)
+    | otherwise = (dropJ n left) +++ right
     where leftsize = sizeofJL left
 testDropJ :: Int -> Bool
 testDropJ n = jlToList (dropJ n tl) == drop n (jlToList tl)
@@ -107,7 +113,7 @@ takeJ :: (Sized b, Monoid b) => Int -> JoinList b a -> JoinList b a
 takeJ n jl  | n >= sizeofJL jl = jl
             | n <= 0 = Empty
 takeJ n (Append m left right)
-    | n >= leftsize = Append (tag left <> tag newRight) left newRight
+    | n >= leftsize = left +++ newRight
     | otherwise = newLeft
     where leftsize = sizeofJL left
           newRight = takeJ (n - leftsize) right
@@ -116,6 +122,7 @@ testTakeJ :: Int -> Bool
 testTakeJ n = jlToList (takeJ n tl) == take n (jlToList tl)
 -- | testTakeJ
 -- >>> testTakeJ 0
+-- True
 
 -- >>> testTakeJ 1
 -- True
@@ -138,8 +145,29 @@ testTakeJ n = jlToList (takeJ n tl) == take n (jlToList tl)
 scoreLine :: String -> JoinList Score String
 scoreLine s = Single (scoreString s) s
 
+createScoreSizeLine :: String -> JoinList (Score, Size) String
+createScoreSizeLine s = Single (scoreString s, Size 1) s
+
 testScoreLine :: JoinList Score String = Append (Score 23) 
     (Single (Score 9) "yay ")
     (Single (Score 14) "haskell!")
 -- >>> scoreLine "yay " +++ scoreLine "haskell!" == testScoreLine
 -- True
+
+instance Buffer (JoinList (Score, Size) String) where
+    toString = unlines . jlToList
+
+    fromString = foldr ((+++) . createScoreSizeLine) Empty . lines
+
+    line = indexJ
+
+    replaceLine n l jl
+        | 0 <= n && n < numLines jl = takeJ n jl +++ fromString l +++ dropJ (n+1) jl
+        | otherwise = jl
+    
+    numLines = sizeofJL
+
+    value = getScore . fst . tag
+
+main = runEditor editor (fromString "yay\nhaskell!\n" :: (JoinList (Score, Size) String))
+
