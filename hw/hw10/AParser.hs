@@ -4,9 +4,9 @@
 
 module AParser where
 
-import           Control.Applicative
 
 import           Data.Char
+import          Control.Applicative
 
 -- A parser for a value of type a is a function which takes a String
 -- represnting the input to be parsed, and succeeds or fails; if it
@@ -57,3 +57,51 @@ posInt = Parser f
 ------------------------------------------------------------
 -- Your code goes below here
 ------------------------------------------------------------
+
+first :: (a -> b) -> (a, c) -> (b, c)
+first f (a, c) = (f a, c)
+instance Functor Parser where
+    fmap g (Parser f) = Parser (fmap (first g) . f)
+
+instance Applicative Parser where
+    pure f = Parser (\s -> Just (f, s))
+    p1 <*> p2 = Parser (\s -> (
+        case runParser p1 s of
+            Nothing -> Nothing
+            Just (f, remain) ->
+                case runParser p2 remain of
+                    Nothing -> Nothing
+                    Just (res, finalRemain) -> Just (f res, finalRemain)))
+
+abParser :: Parser (Char, Char)
+abParser = (,) <$> char 'a' <*> char 'b'
+-- | abParser
+-- >>> runParser abParser "abcdef" == Just (('a', 'b'), "cdef")
+-- True
+-- >>> runParser abParser "aebcdf" == Nothing
+-- True
+
+abParser_ :: Parser ()
+abParser_ = (\_ _ -> ()) <$> char 'a' <*> char 'b'
+
+intPair :: Parser [Integer]
+intPair = (\x y -> [x, y]) <$> posInt <*  char ' ' <*> posInt
+-- | intPair
+-- >>> runParser intPair "12 34" == Just ([12, 34], "")
+-- True
+
+instance Alternative Parser where
+    empty = Parser (const Nothing)
+    p1 <|> p2 = Parser (\s -> runParser p1 s <|> runParser p2 s)
+    
+intOrUppercase :: Parser ()
+intOrUppercase = () <$ satisfy isUpper <|> () <$ posInt
+-- | intOrUppercase
+-- >>> runParser intOrUppercase "342abcd" == Just ((), "abcd")
+-- True
+
+-- >>> runParser intOrUppercase "XYZ" == Just ((), "YZ")
+-- True
+
+-- >>> runParser intOrUppercase "foo" == Nothing
+-- True
