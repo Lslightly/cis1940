@@ -31,6 +31,9 @@ first f (x,y) = (f x, y)
 
 instance Functor Parser where
   fmap = inParser . fmap . fmap . first
+  {-
+    here fmap can apply to (a->b) to get (f a -> f b)
+  -}
 
 instance Applicative Parser where
   pure a = Parser (\s -> Just (a, s))
